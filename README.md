@@ -2,7 +2,7 @@
 This is for AI.
 
 
-# 🎨 Pixel Art Studio (Free Edition)
+# 🎨 Pixel Art Studio
 
 > **macOS 스타일 다크모드 지원 & AI / Vibe Coding 연동에 최적화된 경량 픽셀 아트 제작 PC 프로그램**
 
