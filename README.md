@@ -26,14 +26,6 @@ Electron 기반으로 제작된 순수 픽셀 아트 편집 툴입니다. 사람
 ### 필수 조건 (Prerequisites)
 - [Node.js](https://nodejs.org/) (LTS 버전 권장)
 
-### 설치 및 실행 (Installation & Run)
-
-1. 저장소 클론 (또는 다운로드)
-   ```bash
-   git clone [https://github.com/YOUR_GITHUB_ID/pixel-art-app.git](https://github.com/YOUR_GITHUB_ID/pixel-art-app.git)
-   cd pixel-art-app
-
-
 ### 📥 다운로드 안내
 - **Windows 사용자:** `PixelArtStudio-v1.0.0-Windows.exe` 다운로드 후 실행
 - **Mac 사용자:** `PixelArtStudio-v1.0.0-Mac.dmg` 다운로드 후 실행
