@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
+<title>픽셀 스튜디오</title>
+<style>
+  /* ─ 되도록 과하지 않게: 단색 계열, 얇은 보더, 잔그림만 사용 ─ */
+  :root {
+    --bg:        #1E1E1E;
+    --panel:     #2A2A2A;
+    --panel-2:   #333333;
+    --line:      #3A3A3A;
+    --line-2:    #474747;
+    --text:      #E0E0E0;
+    --text-dim:  #999999;
+    --accent:    #4C6EF5;   /* 흔한 툴블루. 그라데이션 없이 단색 */
+    --danger:    #E85950;
+    --radius:    12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Pretendard",
+                 "Segoe UI", "Malgun Gothic", sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+  }
+
+  #app { display: flex; flex-direction: column; height: 100vh; }
+
+  kbd {
+    display: inline-block;
+    padding: 1px 5px;
+    border: 1px solid var(--line-2);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: var(--panel-2);
+    font-family: inherit;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  /* ═══ 타이틀바 ═══════════════════════════════ */
+  #titlebar {
+    height: 42px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    -webkit-app-region: drag;
+    padding: 0 12px 0 16px;
+    background: #242424;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .tb-logo {
+    width: 22px; height: 22px;
+    margin-right: 10px;
+    border-radius: 6px;
+    background: conic-gradient(#FF5C5C, #FFB86C, #48D1C4, #7C6CFF, #FF5C5C);
+    box-shadow: 0 0 10px rgba(124,108,255,0.35);
+  }
+  .tb-title { font-size: 13px; font-weight: 600; }
+
+  .tb-spacer { flex: 1; }
+
+  .tb-btn {
+    -webkit-app-region: no-drag;
+    width: 36px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    margin-left: 6px;
+    background: var(--panel);
+    color: var(--text-dim);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 13px;
+    transition: background 0.2s, color 0.2s;
+  }
+  .tb-btn:hover { background: var(--panel-2); color: var(--text); }
+  .tb-btn.close:hover { background: var(--danger); color: #fff; border-color: transparent; }
+
+  /* ═══ 본문 ═══════════════════════════════════ */
+  #workspace {
+    flex: 1;
+    display: flex;
+    padding: 16px;
+    gap: 16px;
+    min-height: 0;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  }
+
+  .panel-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+
+  /* ── 좌측 툴바 ── */
+  #toolbar {
+    width: 86px;
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    padding: 14px 12px;
+    gap: 8px;
+  }
+
+  .tool-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    padding: 11px 4px;
+    background: var(--panel-2);
+    color: var(--text-dim);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 11px;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+  }
+  .tool-btn .ico { font-size: 17px; line-height: 1; }
+  .tool-btn:hover { background: #3B3B3B; color: var(--text); }
+  .tool-btn.active {
+    color: var(--text);
+    background: #3D3F4A;
+    border-color: var(--accent);
+  }
+
+  .tool-sep { height: 1px; margin: 2px 0; background: var(--line); }
+
+  .tool-danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+
+  /* ── 캔버스 ── */
+  #canvas-area {
+    flex: 1;
+    display: flex;
+    overflow: auto;          /* 크게 확대하면 여기서 스크롤 */
+    min-width: 0;
+    min-height: 0;
+  }
+
+  #canvas-frame {
+    margin: auto;            /* 넘칠 때도 스크롤로 안전하게 중앙 유지 */
+    padding: 14px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  }
+
+  #canvas-wrap {
+    position: relative;
+    line-height: 0;
+    overflow: hidden;
+    border-radius: 4px;
+    /* 체커보드 배경 크기는 JS에서 그리드 크기에 맞춰 갱신 */
+    background-image:
+      linear-gradient(45deg, #262626 25%, transparent 25%, transparent 75%, #262626 75%),
+      linear-gradient(45deg, #262626 25%, transparent 25%, transparent 75%, #262626 75%);
+    background-color: #1C1C1C;
+  }
+
+  #pixel-canvas {
+    display: block;
+    image-rendering: pixelated;
+    touch-action: none;
+    cursor: crosshair;
+  }
+  #pixel-canvas.eraser { cursor: cell; }
+
+  #grid-canvas { position: absolute; inset: 0; pointer-events: none; }
+
+  /* ── 확대/축소 컨트롤 ── */
+  #zoom-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 12px;
+  }
+  #zoom-bar button {
+    min-width: 28px;
+    height: 26px;
+    padding: 0 8px;
+    background: var(--panel-2);
+    color: var(--text-dim);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 12px;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+  }
+  #zoom-bar button:hover { color: var(--text); border-color: var(--line-2); }
+  #zoom-label {
+    min-width: 46px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  /* ── 우측 패널 ── */
+  #side {
+    width: 200px;
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    gap: 8px;
+  }
+
+  .save-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 10px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 12px;
+    font-weight: 600;
+    transition: background 0.2s, transform 0.15s;
+  }
+  .save-btn:hover { background: #3B5BDB; }
+  .save-btn:active { transform: translateY(1px); }
+  .save-btn .ico { font-size: 18px; line-height: 1; }
+
+  .stat-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 11px;
+    background: var(--panel-2);
+    border-radius: 8px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .stat-box b { color: var(--text); font-weight: 600; }
+
+  .shortcut-list {
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+    font-size: 10.5px;
+    line-height: 2.1;
+    color: var(--text-dim);
+  }
+  .shortcut-list .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  /* ═══ 하단 팔레트 + 크기 선택 ════════════════ */
+  #bottom-bar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;          /* 색이 많아지면 자동으로 두 줄 */
+    row-gap: 10px;
+    gap: 16px;
+    margin: 0 16px 16px;
+    padding: 12px 18px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  }
+
+  .bar-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+  }
+
+  /* 크기 선택 */
+  #size-group { display: flex; align-items: center; gap: 6px; }
+
+  .size-btn {
+    min-width: 38px;
+    padding: 7px 8px;
+    background: var(--panel-2);
+    color: var(--text-dim);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 11px;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+  }
+  .size-btn:hover { color: var(--text); }
+  .size-btn.active { color: #fff; background: var(--accent); border-color: var(--accent); }
+
+  #custom-size {
+    width: 56px;
+    padding: 7px 8px;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 11px;
+    text-align: center;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  #custom-size:focus { border-color: var(--accent); }
+  #custom-size::-webkit-inner-spin-button { display: none; }
+  #custom-size { -moz-appearance: textfield; appearance: textfield; }
+
+  .bar-sep { width: 1px; height: 26px; background: var(--line); }
+
+  /* 팔레트 */
+  #swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .swatch {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    outline: 1px solid rgba(255,255,255,0.12);
+    transition: transform 0.15s, border-color 0.2s;
+  }
+  .swatch:hover { transform: translateY(-2px); }
+  .swatch.active { border-color: #fff; }
+
+  .pal-current {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
+
+  #current-color {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.3);
+    background: #000;
+  }
+
+  .custom-color-wrapper {
+    position: relative;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    overflow: hidden;
+    background:
+      conic-gradient(#E85950, #F7B32B, #5CAB5C, #4C6EF5, #B45CD9, #E85950);
+    outline: 1px solid rgba(255,255,255,0.12);
+    transition: transform 0.15s;
+  }
+  .custom-color-wrapper:hover { transform: translateY(-2px); }
+  #custom-color-picker {
+    position: absolute;
+    inset: -8px;
+    width: 46px; height: 46px;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .add-btn {
+    padding: 8px 11px;
+    background: var(--panel-2);
+    color: var(--text-dim);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+  }
+  .add-btn:hover { color: var(--text); border-color: var(--accent); }
+  .add-btn:active { transform: translateY(1px); }
+
+  /* ═══ 토스트 ═════════════════════════════════ */
+  #toast {
+    position: fixed;
+    left: 50%;
+    bottom: 92px;
+    transform: translateX(-50%) translateY(10px);
+    padding: 9px 20px;
+    background: rgba(46,46,46,0.97);
+    border: 1px solid var(--line-2);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 12px;
+    box-shadow: 0 6px 22px rgba(0,0,0,0.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 99;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- 타이틀바 -->
+  <header id="titlebar">
+    <div class="tb-logo"></div>
+    <span class="tb-title">픽셀 스튜디오</span>
+    <div class="tb-spacer"></div>
+    <button class="tb-btn" id="btn-minimize" title="창 내리기">—</button>
+    <button class="tb-btn close" id="btn-close" title="닫기">✕</button>
+  </header>
+
+  <main id="workspace">
+
+    <!-- 좌측 툴바 -->
+    <section id="toolbar" class="panel">
+      <div class="panel-title">도구</div>
+
+      <button class="tool-btn active" id="tool-pen" data-tool="pen" title="펜 (B)">
+        <span class="ico">✏️</span><span>펜</span><kbd id="kbd-pen">B</kbd>
+      </button>
+      <button class="tool-btn" id="tool-eraser" data-tool="eraser" title="지우개 (E)">
+        <span class="ico">🧽</span><span>지우개</span><kbd id="kbd-eraser">E</kbd>
+      </button>
+
+      <div class="tool-sep"></div>
+
+      <button class="tool-btn" id="tool-undo" title="되돌리기 (Mod+Z)">
+        <span class="ico">↩️</span><span>되돌리기</span>
+      </button>
+      <button class="tool-btn" id="tool-redo" title="다시하기 (Mod+Shift+Z)">
+        <span class="ico">↪️</span><span>다시하기</span>
+      </button>
+
+      <div class="tool-sep"></div>
+
+      <button class="tool-btn tool-danger" id="tool-clear" title="처음부터 다시 그리기">
+        <span class="ico">🧹</span><span>전체 지움</span>
+      </button>
+    </section>
+
+    <!-- 중앙 캔버스 -->
+    <section id="canvas-area">
+      <div id="canvas-frame">
+        <div id="canvas-wrap">
+          <canvas id="pixel-canvas"></canvas>
+          <canvas id="grid-canvas"></canvas>
+        </div>
+
+        <div id="zoom-bar">
+          <button id="zoom-out" title="축소">−</button>
+          <span id="zoom-label">100%</span>
+          <button id="zoom-in" title="확대">＋</button>
+          <button id="zoom-fit" title="창 크기에 딱 맞게">맞춤</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 우측 패널 -->
+    <aside id="side" class="panel">
+      <button class="save-btn" id="btn-save" title="저장 (Mod+S)">
+        <span class="ico">💾</span><span>PNG 저장</span>
+      </button>
+
+      <div class="stat-box"><span>그리드</span><b id="stat-grid">16 × 16</b></div>
+      <div class="stat-box"><span>그린 셀</span><b id="stat-cells">0</b></div>
+      <div class="stat-box"><span>현재 색</span><b id="stat-color">#000000</b></div>
+
+      <div class="shortcut-list">
+        <div class="row"><span>되돌리기</span><kbd id="sc-undo">⌘Z</kbd></div>
+        <div class="row"><span>다시하기</span><kbd id="sc-redo">⇧⌘Z</kbd></div>
+        <div class="row"><span>저장</span><kbd id="sc-save">⌘S</kbd></div>
+        <div class="row"><span>펜 / 지우개</span><kbd>B / E</kbd></div>
+        <div class="row"><span>팔레트 색</span><kbd>1~8</kbd></div>
+        <div class="row"><span>확대 / 축소</span><kbd id="sc-zoom">⌘+ / −</kbd></div>
+        <div class="row"><span>창 크기 맞춤</span><kbd id="sc-fit">⌘0</kbd></div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- 하단: 크기 선택 + 팔레트 -->
+  <footer id="bottom-bar">
+    <span class="bar-label">그리드 크기</span>
+    <div id="size-group">
+      <button class="size-btn" data-size="8">8</button>
+      <button class="size-btn active" data-size="16">16</button>
+      <button class="size-btn" data-size="32">32</button>
+      <button class="size-btn" data-size="64">64</button>
+      <input type="number" id="custom-size" min="4" max="128" value="16" title="직접 입력 (4~128)" />
+    </div>
+
+    <div class="bar-sep"></div>
+
+    <span class="bar-label">색</span>
+    <div id="swatches"></div>
+
+    <div class="pal-current">
+      <span class="bar-label">현재</span>
+      <div id="current-color" title="선택된 색상"></div>
+      <div class="custom-color-wrapper" title="자유 색상 고르기">
+        <input type="color" id="custom-color-picker" value="#4C6EF5" />
+      </div>
+      <button class="add-btn" id="btn-add-color" title="지금 고른 색을 팔레트에 추가">＋ 팔레트</button>
+    </div>
+  </footer>
+
+  <div id="toast"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  창 제어 (커스텀 타이틀바)
+// ═══════════════════════════════════════════════════
+const { ipcRenderer } = require('electron');
+document.getElementById('btn-close').addEventListener('click', () => ipcRenderer.send('window-close'));
+document.getElementById('btn-minimize').addEventListener('click', () => ipcRenderer.send('window-minimize'));
+
+// ═══════════════════════════════════════════════════
+//  픽셀 아트 엔진
+// ═══════════════════════════════════════════════════
+const DISPLAY = 512;                       // 화면에 보이는 캔버스 크기 (px)
+const EXPORT_SCALE = 32;                   // 저장 PNG: 1픽셀당 32px
+
+const canvas    = document.getElementById('pixel-canvas');
+const gridCanvas= document.getElementById('grid-canvas');
+const wrap      = document.getElementById('canvas-wrap');
+const ctx       = canvas.getContext('2d');
+const gctx      = gridCanvas.getContext('2d');
+
+let GRID   = 16;                           // 그리드 크기 (사용자 지정 가능)
+let pixels = new Array(GRID * GRID).fill(null);   // null = 투명
+
+// ── 상태 ──
+let currentColor = '#4C6EF5';
+let currentTool  = 'pen';
+let isPainting   = false;
+let pushedForStroke = false;               // 이번 획에서 되돌리기 상태 저장 여부
+
+const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+
+// ── 되돌리기 / 다시하기 기록 ──
+const HISTORY_MAX = 100;
+let history = [];                          // "과거" 상태들 (여기로 되돌림)
+let future  = [];                          // 되돌렸다가 다시 갈 상태들
+
+function snapshot() {
+  return { grid: GRID, pixels: pixels.slice() };
+}
+
+function applySnapshot(s) {
+  GRID   = s.grid;
+  pixels = s.pixels.slice();
+  setupCanvas();                           // 캔버스 해상도도 함께 복원 (직사각형 버그 수정)
+  syncSizeUI();
+  render();
+}
+
+function recordBeforeChange() {
+  // 변경이 "처음 일어나려는 순간"의 상태를 과거로 저장
+  history.push(snapshot());
+  if (history.length > HISTORY_MAX) history.shift();
+  future.length = 0;                       // 새로 그으면 redo 기록은 사라짐
+}
+
+function undo() {
+  if (!history.length) return;             // 되돌릴 게 없으면 아무 일도 일어나지 않음
+  future.push(snapshot());
+  applySnapshot(history.pop());
+}
+
+function redo() {
+  if (!future.length) return;              // 다시할 게 없으면 아무 일도 일어나지 않음
+  history.push(snapshot());
+  applySnapshot(future.pop());
+}
+
+function updateUndoUI() {
+  const u = document.getElementById('tool-undo');
+  const r = document.getElementById('tool-redo');
+  u.style.opacity = history.length ? 1 : 0.4;
+  r.style.opacity = future.length  ? 1 : 0.4;
+}
+
+// ── 좌표 변환: 화면 위치 → 격자 셀 ──
+function cellFromEvent(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / rect.width  * GRID);
+  const y = Math.floor((e.clientY - rect.top)  / rect.height * GRID);
+  if (x < 0 || y < 0 || x >= GRID || y >= GRID) return null;
+  return { x, y };
+}
+
+// ── 픽셀 찍기 / 지우기 ──
+function applyCell(x, y) {
+  const idx   = y * GRID + x;
+  const value = (currentTool === 'eraser') ? null : currentColor;
+  if (pixels[idx] === value) return false;
+
+  if (!pushedForStroke) {                  // 획 하나당 기록 1번
+    recordBeforeChange();
+    pushedForStroke = true;
+  }
+  pixels[idx] = value;
+  return true;
+}
+
+// ── 렌더링 ──
+// 캔버스는 그리드 크기 그대로(=GRID×GRID px), CSS에서 pixelated로 확대 표시
+function render() {
+  ctx.clearRect(0, 0, GRID, GRID);
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      const c = pixels[y * GRID + x];
+      if (c !== null) {
+        ctx.fillStyle = c;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  }
+  drawGridOverlay();
+  updateStats();
+  updateUndoUI();
+}
+
+// 그리드 선은 오버레이에만 → 저장 PNG에는 선이 포함되지 않음
+function drawGridOverlay() {
+  const S = DISPLAY;
+  gctx.clearRect(0, 0, S, S);
+  const cell = S / GRID;
+
+  gctx.strokeStyle = 'rgba(255,255,255,0.07)';
+  gctx.lineWidth = 1;
+  gctx.beginPath();
+  for (let i = 1; i < GRID; i++) {
+    const p = Math.round(i * cell) + 0.5;
+    gctx.moveTo(p, 0); gctx.lineTo(p, S);
+    gctx.moveTo(0, p); gctx.lineTo(S, p);
+  }
+  gctx.stroke();
+
+  // 4칸마다 조금 진한 보조선
+  gctx.strokeStyle = 'rgba(255,255,255,0.16)';
+  gctx.beginPath();
+  for (let i = 4; i < GRID; i += 4) {
+    const p = Math.round(i * cell) + 0.5;
+    gctx.moveTo(p, 0); gctx.lineTo(p, S);
+    gctx.moveTo(0, p); gctx.lineTo(S, p);
+  }
+  gctx.stroke();
+}
+
+// ── 그리기 입력 ──
+canvas.addEventListener('pointerdown', (e) => {
+  isPainting = true;
+  pushedForStroke = false;
+  canvas.setPointerCapture(e.pointerId);
+  drawAt(e);
+});
+canvas.addEventListener('pointermove', (e) => { if (isPainting) drawAt(e); });
+canvas.addEventListener('pointerup',     () => { isPainting = false; });
+canvas.addEventListener('pointercancel', () => { isPainting = false; });
+window.addEventListener('blur',          () => { isPainting = false; });
+
+function drawAt(e) {
+  const cell = cellFromEvent(e);
+  if (!cell) return;
+  if (applyCell(cell.x, cell.y)) render();
+}
+
+// ═══════════════════════════════════════════════════
+//  그리드 크기 선택 (8 / 16 / 32 / 64 / 직접입력)
+// ═══════════════════════════════════════════════════
+const customSizeInput = document.getElementById('custom-size');
+
+function setGridSize(n) {
+  n = Math.round(n);
+  if (!Number.isFinite(n) || n < 4)  n = 4;
+  if (n > 128) n = 128;
+
+  if (n === GRID) { syncSizeUI(); return; }
+
+  recordBeforeChange();                    // 크기 변경도 되돌릴 수 있게
+
+  // 기존 그림을 캔버스 비율 그대로 늘려(줄여) 옮긴다.
+  //  - 4×4 → 8×8 : 한 픽셀이 자동으로 2×2가 됨
+  //  - 그림의 상대적 위치는 바뀌지 않음 (왼쪽 위에 있던 건 그대로 왼쪽 위)
+  //  - 줄일 때는 한 블록 안에 색이 하나라도 있으면 살려서 선이 안 끊기게
+  const old = pixels;
+  const oldG = GRID;
+  const next = new Array(n * n).fill(null);
+  for (let y = 0; y < n; y++) {
+    const sy0 = Math.floor(y * oldG / n);
+    const sy1 = Math.max(sy0 + 1, Math.floor((y + 1) * oldG / n));
+    for (let x = 0; x < n; x++) {
+      const sx0 = Math.floor(x * oldG / n);
+      const sx1 = Math.max(sx0 + 1, Math.floor((x + 1) * oldG / n));
+      let c = null;
+      for (let sy = sy0; sy < sy1 && c === null; sy++) {
+        for (let sx = sx0; sx < sx1 && c === null; sx++) {
+          c = old[sy * oldG + sx];
+        }
+      }
+      next[y * n + x] = c;
+    }
+  }
+
+  GRID   = n;
+  pixels = next;
+
+  setupCanvas();                           // 내부에서 캔버스 해상도까지 맞춤
+  syncSizeUI();
+  render();
+  showToast('비율에 맞춰 ' + oldG + '×' + oldG + ' → ' + GRID + '×' + GRID + ' 로 바꿨어요 (그림 자동 보정)');
+}
+
+function setupCanvas() {
+  // ★ 캔버스 실제 해상도를 그리드 크기에 1:1로 맞춘다.
+  //   (초기 300×150 기본값인 상태로 두면 시작 직후 클릭 위치가 어긋나는 버그 발생)
+  canvas.width = canvas.height = GRID;
+  gridCanvas.width = gridCanvas.height = DISPLAY;
+  applyZoom();                             // 화면 배율(확대/축소) 적용
+}
+
+// ── 캔버스 확대/축소 ──
+// 보기 배율만 바꾸는 것 — 그림 데이터와 저장 PNG 해상도는 영향 없음
+const ZOOM_LEVELS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
+const zoomLabel = document.getElementById('zoom-label');
+let zoomIdx = 3;                           // 기본 100%
+
+function zoomDisp() { return Math.round(DISPLAY * ZOOM_LEVELS[zoomIdx]); }
+
+function applyZoom() {
+  const disp = zoomDisp();
+  canvas.style.width  = disp + 'px';
+  canvas.style.height = disp + 'px';
+  gridCanvas.style.width  = disp + 'px';
+  gridCanvas.style.height = disp + 'px';
+  // 체커보드 배경을 현재 배율의 픽셀 단위에 맞춤
+  const cellPx = disp / GRID;
+  wrap.style.backgroundSize = (cellPx * 2) + 'px ' + (cellPx * 2) + 'px, '
+                            + (cellPx * 2) + 'px ' + (cellPx * 2) + 'px';
+  wrap.style.backgroundPosition = '0 0, ' + cellPx + 'px ' + cellPx + 'px';
+  zoomLabel.textContent = Math.round(ZOOM_LEVELS[zoomIdx] * 100) + '%';
+}
+
+function stepZoom(dir) {
+  const i = zoomIdx + dir;
+  if (i < 0 || i >= ZOOM_LEVELS.length) return;
+  zoomIdx = i;
+  applyZoom();
+}
+
+function setZoomIndex(i) {
+  if (i < 0 || i >= ZOOM_LEVELS.length) return;
+  zoomIdx = i;
+  applyZoom();
+}
+
+// "맞춤": 창에 딱 들어가는 가장 큰 배율로
+function fitZoom() {
+  const area = document.getElementById('canvas-area');
+  const avail = Math.min(area.clientWidth, area.clientHeight) - 34;  // 프레임 여백 감안
+  if (avail <= 0) return;
+  let best = 0;
+  for (let i = 0; i < ZOOM_LEVELS.length; i++) {
+    if (DISPLAY * ZOOM_LEVELS[i] <= avail) best = i;
+  }
+  setZoomIndex(best);
+}
+
+document.getElementById('zoom-in').addEventListener('click',  () => stepZoom(1));
+document.getElementById('zoom-out').addEventListener('click', () => stepZoom(-1));
+document.getElementById('zoom-fit').addEventListener('click', fitZoom);
+
+// ⌘(Ctrl) 휠로 확대/축소
+canvas.addEventListener('wheel', (e) => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  e.preventDefault();
+  stepZoom(e.deltaY < 0 ? 1 : -1);
+}, { passive: false });
+
+function syncSizeUI() {
+  document.querySelectorAll('.size-btn').forEach(b => {
+    b.classList.toggle('active', Number(b.dataset.size) === GRID);
+  });
+  customSizeInput.value = GRID;            // 입력창도 현재 크기로 맞춤
+  document.getElementById('stat-grid').textContent = GRID + ' × ' + GRID;
+}
+
+document.querySelectorAll('.size-btn').forEach(btn => {
+  btn.addEventListener('click', () => setGridSize(Number(btn.dataset.size)));
+});
+
+customSizeInput.addEventListener('change', () => setGridSize(Number(customSizeInput.value)));
+customSizeInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    customSizeInput.blur();
+    setGridSize(Number(customSizeInput.value));
+  }
+});
+
+// ═══════════════════════════════════════════════════
+//  툴바 (펜 / 지우개 / 되돌리기 / 다시하기 / 전체 지움)
+// ═══════════════════════════════════════════════════
+const toolBtns = {
+  pen:    document.getElementById('tool-pen'),
+  eraser: document.getElementById('tool-eraser')
+};
+
+function setTool(tool) {
+  currentTool = tool;
+  toolBtns.pen.classList.toggle('active', tool === 'pen');
+  toolBtns.eraser.classList.toggle('active', tool === 'eraser');
+  canvas.classList.toggle('eraser', tool === 'eraser');
+}
+
+toolBtns.pen.addEventListener('click',    () => setTool('pen'));
+toolBtns.eraser.addEventListener('click', () => setTool('eraser'));
+
+document.getElementById('tool-undo').addEventListener('click', undo);
+document.getElementById('tool-redo').addEventListener('click', redo);
+
+document.getElementById('tool-clear').addEventListener('click', () => {
+  if (!pixels.some(p => p !== null)) return;
+  recordBeforeChange();
+  pixels = new Array(GRID * GRID).fill(null);
+  render();
+  showToast('새로 그릴 준비 완료');
+});
+
+// ═══════════════════════════════════════════════════
+//  팔레트
+// ═══════════════════════════════════════════════════
+const swatchWrap   = document.getElementById('swatches');
+const currentEl    = document.getElementById('current-color');
+const statColorEl  = document.getElementById('stat-color');
+const customPicker = document.getElementById('custom-color-picker');
+
+const DEFAULT_PALETTE = [
+  '#1E1E1E', '#FFFFFF',
+  '#E85950', '#F7B32B', '#FFE54C', '#5CAB5C',
+  '#4C6EF5', '#B45CD9'
+];
+const CUSTOM_COLOR_MAX = 16;
+const COLOR_STORE_KEY = 'pixelStudio.customColors';
+
+// 저장해둔 '자주 쓰는 색' 불러오기 (앱을 다시 켜도 유지)
+let customColors = [];
+try {
+  const saved = JSON.parse(localStorage.getItem(COLOR_STORE_KEY) || '[]');
+  if (Array.isArray(saved)) {
+    customColors = saved.filter(v => typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v));
+  }
+} catch (e) { customColors = []; }        // 저장본이 깨져 있어도 앱은 정상 실행
+
+function persistColors() {
+  try { localStorage.setItem(COLOR_STORE_KEY, JSON.stringify(customColors)); }
+  catch (e) { /* 용량 문제 등이 있어도 그리기에는 지장 없음 */ }
+}
+
+let PALETTE = DEFAULT_PALETTE.slice();    // 실제 표시 중인 전체 색 목록
+
+function renderSwatches() {
+  PALETTE = DEFAULT_PALETTE.concat(customColors);
+  swatchWrap.innerHTML = '';
+
+  PALETTE.forEach((hex, i) => {
+    const sw = document.createElement('button');
+    sw.className = 'swatch';
+    sw.dataset.color = hex;
+    sw.style.background = hex;
+
+    if (i < DEFAULT_PALETTE.length) {
+      sw.title = hex + '  (' + (i + 1) + ')';
+    } else {
+      // 내가 추가한 색: 오른쪽 클릭으로 삭제
+      sw.dataset.custom = '1';
+      sw.title = hex + '  — 오른쪽 클릭하면 빠져요';
+      sw.addEventListener('contextmenu', (ev) => {
+        ev.preventDefault();
+        customColors = customColors.filter(c => c.toLowerCase() !== hex.toLowerCase());
+        persistColors();
+        renderSwatches();
+        showToast('팔레트에서 뺐어요 (' + hex.toUpperCase() + ')');
+      });
+    }
+
+    sw.addEventListener('click', () => {
+      setCurrentColor(hex);
+      setTool('pen');
+    });
+    swatchWrap.appendChild(sw);
+  });
+}
+
+function setCurrentColor(hex) {
+  currentColor = hex;
+  currentEl.style.background = hex;
+  statColorEl.textContent = hex.toUpperCase();
+  document.querySelectorAll('.swatch').forEach(sw => {
+    sw.classList.toggle('active', sw.dataset.color === hex);
+  });
+}
+
+// 자주 쓰는 색: 현재 색을 팔레트에 추가
+const addColorBtn = document.getElementById('btn-add-color');
+addColorBtn.addEventListener('click', () => {
+  const hex = currentColor.toLowerCase();
+  const dup = DEFAULT_PALETTE.some(c => c.toLowerCase() === hex)
+           || customColors.some(c => c.toLowerCase() === hex);
+  if (dup) { showToast('이미 팔레트에 있는 색이에요'); return; }
+  if (customColors.length >= CUSTOM_COLOR_MAX) {
+    showToast('자유 색은 ' + CUSTOM_COLOR_MAX + '개까지 저장돼요 (뺄 때는 칩을 오른쪽 클릭)');
+    return;
+  }
+  customColors.push(hex);
+  persistColors();
+  renderSwatches();
+  setCurrentColor(hex);
+  showToast('팔레트에 추가했어요 (' + hex.toUpperCase() + ')');
+});
+
+customPicker.addEventListener('input', () => {
+  setCurrentColor(customPicker.value);
+  setTool('pen');
+});
+
+// ═══════════════════════════════════════════════════
+//  PNG 저장
+// ═══════════════════════════════════════════════════
+document.getElementById('btn-save').addEventListener('click', savePNG);
+
+function savePNG() {
+  if (!pixels.some(p => p !== null)) {
+    showToast('아직 그린 게 없어요. 먼저 그려주세요');
+    return;
+  }
+
+  // 1픽셀 = EXPORT_SCALE px 로 확대 저장 (투명 배경 유지)
+  const out = document.createElement('canvas');
+  out.width  = out.height = GRID * EXPORT_SCALE;
+  const octx = out.getContext('2d');
+
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      const c = pixels[y * GRID + x];
+      if (c !== null) {
+        octx.fillStyle = c;
+        octx.fillRect(x * EXPORT_SCALE, y * EXPORT_SCALE, EXPORT_SCALE, EXPORT_SCALE);
+      }
+    }
+  }
+
+  const link = document.createElement('a');
+  link.download = 'pixel-' + GRID + 'x' + GRID + '-' + Date.now() + '.png';
+  link.href = out.toDataURL('image/png');
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  showToast('PNG 저장 완료 — 다운로드 폴더 확인');
+}
+
+// ═══════════════════════════════════════════════════
+//  통계 / 토스트
+// ═══════════════════════════════════════════════════
+const statCells = document.getElementById('stat-cells');
+
+function updateStats() {
+  statCells.textContent = String(pixels.filter(p => p !== null).length);
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ═══════════════════════════════════════════════════
+//  단축키 (맥: ⌘ 기준 / 윈도우·리눅스: Ctrl 기준)
+// ═══════════════════════════════════════════════════
+window.addEventListener('keydown', (e) => {
+  // 입력창에 글자 쓰는 중에는 무시 (크기 입력 등)
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea') return;
+
+  const mod = isMac ? e.metaKey : e.ctrlKey;
+
+  // 되돌리기: ⌘Z / Ctrl+Z
+  if (mod && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+    e.preventDefault();
+    undo();
+    return;
+  }
+  // 다시하기: ⇧⌘Z / Ctrl+Shift+Z / Ctrl+Y
+  if (mod && (e.key === 'y' || e.key === 'Y')
+      || (mod && e.shiftKey && (e.key === 'z' || e.key === 'Z'))) {
+    e.preventDefault();
+    redo();
+    return;
+  }
+  // 저장: ⌘S / Ctrl+S
+  if (mod && (e.key === 's' || e.key === 'S')) {
+    e.preventDefault();
+    savePNG();
+    return;
+  }
+
+  if (mod) return;                         // 다른 ⌘ 조합은 건드리지 않음
+
+  // 확대/축소: ⌘+ / ⌘− / ⌘0 (100%로 되돌리기)
+  if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); stepZoom(1);  return; }
+  if (mod && e.key === '-')                    { e.preventDefault(); stepZoom(-1); return; }
+  if (mod && e.key === '0')                    { e.preventDefault(); setZoomIndex(3); return; }
+
+  // B: 펜, E: 지우개
+  if (e.key === 'b' || e.key === 'B') setTool('pen');
+  if (e.key === 'e' || e.key === 'E') setTool('eraser');
+
+  // 1~8: 팔레트 색 직접 고르기
+  if (e.key >= '1' && e.key <= '8') {
+    const c = PALETTE[Number(e.key) - 1];
+    if (c) { setCurrentColor(c); setTool('pen'); }
+  }
+});
+
+// 플랫폼에 맞게 단축키 표기 갱신
+function refreshShortcutLabels() {
+  const undoKey = isMac ? '⌘Z'      : 'Ctrl+Z';
+  const redoKey = isMac ? '⇧⌘Z'     : 'Ctrl+Y';
+  const saveKey = isMac ? '⌘S'      : 'Ctrl+S';
+  const modKey  = isMac ? '⌘'       : 'Ctrl';
+  document.getElementById('sc-undo').textContent = undoKey;
+  document.getElementById('sc-redo').textContent = redoKey;
+  document.getElementById('sc-save').textContent = saveKey;
+  document.getElementById('sc-zoom').textContent = isMac ? '⌘+ / −' : 'Ctrl+ / -';
+  document.getElementById('sc-fit').textContent  = isMac ? '⌘0' : 'Ctrl+0';
+  document.getElementById('tool-undo').title = '되돌리기 (' + undoKey + ')';
+  document.getElementById('tool-redo').title = '다시하기 (' + redoKey + ')';
+  document.getElementById('btn-save').title  = '저장 (' + saveKey + ')';
+  document.getElementById('kbd-pen').textContent    = 'B';
+  document.getElementById('kbd-eraser').textContent = 'E';
+}
+
+// ═══════════════════════════════════════════════════
+//  초기화
+// ═══════════════════════════════════════════════════
+refreshShortcutLabels();
+setupCanvas();
+renderSwatches();
+setCurrentColor(DEFAULT_PALETTE[6]);       // 기본: 파랑
+syncSizeUI();
+setTool('pen');
+render();
+</script>
+</body>
+</html>

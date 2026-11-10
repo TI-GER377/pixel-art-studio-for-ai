@@ -1,0 +1,64 @@
+{
+  "name": "pixel-art-studio",
+  "version": "1.1.0",
+  "description": "macOS 다크모드 스타일의 픽셀 아트 제작 프로그램",
+  "main": "main.js",
+  "author": "Pixel Art Studio",
+  "license": "MIT",
+
+  "scripts": {
+    "start": "ELECTRON_OVERRIDE_DIST_PATH=\"$HOME/electron-runtime\" electron .",
+    "build:win": "electron-builder --win -c.directories.output=\"$HOME/pixelart-dist/win\"",
+    "build:mac": "electron-builder --mac -c.directories.output=\"$HOME/pixelart-dist/mac\"",
+    "install:app": "bash install-app.sh",
+    "deploy:mac": "npm run build:mac && npm run install:app",
+    "cli": "node cli.js"
+  },
+
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+
+  "build": {
+    "appId": "com.pixelart.studio",
+    "productName": "Pixel Art Studio",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "cli.js",
+      "CLI.md",
+      "AGENTS.md"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "PixelArtStudio-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "language": "1042"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64"]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "identity": null,
+      "category": "public.app-category.graphics-design",
+      "artifactName": "PixelArtStudio-${version}.${ext}"
+    }
+  }
+}
